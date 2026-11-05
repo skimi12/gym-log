@@ -9,3 +9,8 @@ dev-dist/
 !.env.example
 .openai/
 *.tsbuildinfo
+build/
+.zig-cache/
+zig-out/
+.loader-test-temp/
+.test-temp/

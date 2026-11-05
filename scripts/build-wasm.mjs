@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { root, wasmPath, manifestPath, abiExports, sourceHashes, sha256, validateWasm } from './core-artifact.mjs'
 
@@ -18,6 +18,9 @@ const args = ['c++', '-target', 'wasm32-freestanding', '-std=c++17', '-O3',
 const build = spawnSync(zig, args, { cwd: root, stdio: 'inherit' })
 if (build.error) throw build.error
 if (build.status !== 0) process.exit(build.status ?? 1)
+// A browser asset is data. Zig marks its output executable on Unix; normalize
+// permissions so native Windows and Linux builds have the same Git artifact.
+await chmod(wasmPath, 0o644)
 const bytes = await readFile(wasmPath)
 await validateWasm(bytes)
 await writeFile(manifestPath, JSON.stringify({

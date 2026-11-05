@@ -1,0 +1,208 @@
+.exercise-select-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--control-border, #c9c9cf);
+  border-radius: 12px;
+  background: var(--control, #fff);
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+.analytics-picker {
+  position: relative;
+  z-index: 2;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--separator, #dedee3);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+}
+
+.analytics-picker input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--control-border, #c9c9cf);
+  border-radius: 10px;
+  background: var(--control, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+
+.picker-section {
+  margin-top: 12px;
+}
+
+.picker-section > strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  color: var(--text-secondary, #68686d);
+}
+
+.chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 3px;
+  scrollbar-width: none;
+}
+
+.chip-row button,
+.period-control button {
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid var(--separator, #dedee3);
+  border-radius: 999px;
+  background: var(--surface-subtle, #f2f2f5);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.picker-list {
+  max-height: min(42vh, 340px);
+  margin-top: 10px;
+  overflow-y: auto;
+  border-top: 1px solid var(--separator, #dedee3);
+}
+
+.picker-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 5px;
+  border: 0;
+  border-bottom: 1px solid var(--separator, #dedee3);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.analytics-controls {
+  margin: 18px 0 14px;
+}
+
+.analytics-page .segmented-control--metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface-subtle, #f2f2f5);
+}
+
+.analytics-page .segmented-control--metrics button {
+  min-height: 44px;
+  padding: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #68686d);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.analytics-page .segmented-control--metrics button[data-active] {
+  background: var(--surface, #fff);
+  color: var(--text, #111114);
+  box-shadow: 0 1px 3px rgb(0 0 0 / .09);
+}
+
+.period-control {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.period-control button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 3px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.period-control button[data-active] {
+  border-color: var(--accent, #3468a8);
+  background: var(--accent-soft, #e9f0fa);
+  color: var(--accent, #3468a8);
+  font-weight: 700;
+}
+
+.chart-section {
+  padding: 14px 0 4px;
+}
+
+.chart-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+  margin-bottom: 8px;
+}
+
+.chart-heading p,
+.chart-heading strong {
+  display: block;
+  margin: 0;
+}
+
+.chart-heading p,
+.chart-heading > span {
+  color: var(--text-secondary, #68686d);
+  font-size: 12px;
+}
+
+.chart-heading strong {
+  margin-top: 2px;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-heading > span {
+  max-width: 150px;
+  text-align: right;
+}
+
+.chart-wrap {
+  width: 100%;
+  height: 270px;
+  margin-left: -3px;
+}
+
+.chart-tooltip {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--separator, #dedee3);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: var(--text, #111114);
+  font-size: 12px;
+}
+
+@media (max-width: 380px) {
+  .analytics-page .segmented-control--metrics button {
+    font-size: 11px;
+  }
+
+  .chart-wrap {
+    height: 240px;
+  }
+}

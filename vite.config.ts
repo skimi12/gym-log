@@ -28,7 +28,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: 'index.html',
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
         // Manifest icons are injected by vite-plugin-pwa. Excluding them from
         // the glob keeps each icon in the precache manifest exactly once.
         globIgnores: ['**/pwa-*.png'],

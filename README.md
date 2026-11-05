@@ -2,6 +2,10 @@
 
 ジムで重量と回数をすばやく記録し、前回記録と成長推移を確認するための完全個人用PWAです。データは端末内のIndexedDBに保存され、ログイン、クラウド同期、外部送信は行いません。
 
+重量・回数・推定1RM・ボリュームの計算エンジンを **C++17** で実装し、WebAssemblyにコンパイルしてブラウザから実際に利用しています。画面はReact、保存はIndexedDBです。C++だけで動く単体テストも用意しています。
+
+[設計・ABI・検証方針](docs/ARCHITECTURE.md) / [応募用の説明と面接準備](docs/PORTFOLIO.md)
+
 ## 主な機能
 
 - 重量・回数・セットの記録、自動保存、前回記録のコピー、中断したトレーニングの復元
@@ -42,6 +46,41 @@ npm run build:sites
 npm run test
 ```
 
+ブラウザ向けのテストでも同梱の実WebAssemblyを読み込みます。JavaScriptの代替計算やWASMのモックは使いません。既存の記録・分析テストに加え、4種類の負荷・欠損値・境界値・大量セット・初期化失敗時の再試行を検証します。
+
+## C++を開発する
+
+### ネイティブテスト
+
+GCCまたはClangのC++17コンパイラとNode.jsを用意します。WindowsではMSYS2のMinGW GCCを使用できます。
+
+```bash
+npm run test:native
+```
+
+コンパイラを指定する場合は環境変数 `CXX` に実行ファイルのパスを設定します。CMakeを使用する場合は次の手順でも実行できます（追加ライブラリは不要です）。
+
+```bash
+cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build/cmake
+ctest --test-dir build/cmake --output-on-failure
+```
+
+### WebAssemblyの再生成
+
+通常のWeb開発には同梱済みの `public/wasm/gym-core.wasm` を利用でき、C++コンパイラのインストールは不要です。C++ソースを変更した場合は、[公式Zig 0.15.2](https://ziglang.org/download/)のC++コンパイラで再生成してください。Zigはビルドツールとしてだけ使い、アプリの計算処理はC++で記述しています。
+
+```bash
+npm run build:wasm
+npm run test:native
+npm test
+npm run build
+```
+
+ZigがPATHにない場合は環境変数 `ZIG` に実行ファイルのパスを設定します。C++ソースと生成WASMのSHA-256を `native/wasm-manifest.json` に記録し、`npm test` と `npm run build` で一致を検査します。ソース変更後に古いバイナリを使ってしまう場合はビルドを停止します。
+
+この構成ではC++が数値計算、Reactが画面、IndexedDBが保存を担当します。速度の優位性は未計測です。
+
 ## 本番ビルドをローカル確認する
 
 ```bash
@@ -72,6 +111,7 @@ Safariの「履歴とWebサイトデータを消去」、サイトデータの�
 ## 主な構成
 
 - React + TypeScript + Vite
+- C++17のストリーミング分析エンジン / WebAssembly（実行時の外部依存・ネットワーク処理なし）
 - Dexie.js / dexie-react-hooks（IndexedDB）
 - Recharts（分析グラフ）
 - lucide-react（UIアイコン）

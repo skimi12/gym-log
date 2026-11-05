@@ -1,0 +1,38 @@
+name: C++ core and PWA
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run verify:wasm
+      - name: C++ native tests (GCC)
+        run: npm run test:native
+      - name: C++ native tests (Clang)
+        run: npm run test:native
+        env:
+          CXX: clang++
+      - name: Install pinned portable Zig compiler
+        run: |
+          curl --fail --location --retry 3 https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz -o "$RUNNER_TEMP/zig.tar.xz"
+          echo "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239  $RUNNER_TEMP/zig.tar.xz" | sha256sum --check
+          tar -xf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP"
+          echo "ZIG=$RUNNER_TEMP/zig-x86_64-linux-0.15.2/zig" >> "$GITHUB_ENV"
+      - run: npm run build:wasm
+      - name: Verify reproducible committed WASM
+        run: git diff --exit-code -- public/wasm/gym-core.wasm native/wasm-manifest.json
+      - run: npm test
+      - run: npm run build

@@ -1,0 +1,11 @@
+{
+  "abiVersion": 1,
+  "compiler": "zig 0.15.2 (C++17)",
+  "sources": {
+    "native/include/gym/analytics_core.hpp": "949d11be06265ef61948485a31376b8a45e5f29ec18328dd404cf9858f134073",
+    "native/src/analytics_core.cpp": "e409168bf3c0ffac3a63d4e9ba58e35c6c29a016f407e52305304a0b5fda14fc",
+    "scripts/build-wasm.mjs": "d6a41fa8812b22d993e9814e9bbaa34d7fed11d1a6b90b7ee25a3aae56acb978"
+  },
+  "wasmSha256": "43bd42a0db29043bbb08c218ce352613fc364571c33c73fff0e3ad8798b10b8e",
+  "wasmBytes": 1253
+}

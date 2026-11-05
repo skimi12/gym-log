@@ -4,10 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run verify:wasm && vite",
+    "build": "npm run verify:wasm && tsc -b && vite build",
     "build:sites": "npm run build && node scripts/prepare-sites.mjs",
-    "test": "vitest run",
+    "test": "npm run verify:wasm && vitest run",
+    "test:native": "node scripts/test-native.mjs",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "verify:wasm": "node scripts/verify-wasm.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -19,6 +22,7 @@
     "recharts": "3.10.1"
   },
   "devDependencies": {
+    "@types/node": "24.19.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "6.0.5",

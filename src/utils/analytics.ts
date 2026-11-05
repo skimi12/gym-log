@@ -1,4 +1,5 @@
 import type { Exercise, LoadType, WorkoutSession, WorkoutSet } from '../types/models'
+import { aggregateSets } from '../native/analyticsEngine'
 import { durationMilliseconds, toLocalDateKey } from './dates'
 import {
   formatWeight,
@@ -124,28 +125,19 @@ export function isMetricSupported(loadType: LoadType, metric: AnalyticsMetric): 
 
 /** Epley estimate. Sets above 12 reps are intentionally outside the model. */
 export function calculateEpley1RM(weight: number, reps: number): number | undefined {
-  if (!Number.isFinite(weight) || weight <= 0) return undefined
-  if (!Number.isInteger(reps) || reps < 1 || reps > 12) return undefined
-  return weight * (1 + reps / 30)
+  return aggregateSets([{ weightKg: weight, reps }], 'weighted').estimated1RM
 }
 
 export const calculateEstimated1RM = calculateEpley1RM
 
 type SetNumbers = Pick<WorkoutSet, 'weightKg' | 'reps'>
 
-function isPositiveFinite(value: number | undefined): value is number {
-  return value !== undefined && Number.isFinite(value) && value > 0
-}
-
 function isRecordedSet(set: SetNumbers): boolean {
   return Number.isFinite(set.reps) && set.reps > 0
 }
 
 export function calculateVolume(sets: readonly SetNumbers[]): number {
-  return sets.reduce((total, set) => {
-    if (!isPositiveFinite(set.weightKg) || !isRecordedSet(set)) return total
-    return total + set.weightKg * set.reps
-  }, 0)
+  return aggregateSets(sets, 'weighted').rawVolume
 }
 
 export const calculateSessionVolume = calculateVolume
@@ -179,40 +171,24 @@ export function summarizeSession(
     durationMinutes: Math.floor(durationMs / 60_000),
     exerciseCount: exercises.length,
     setCount: sessionSets.length,
-    totalReps: sessionSets.reduce(
-      (total, set) =>
-        total + (Number.isFinite(set.reps) && set.reps > 0 ? set.reps : 0),
-      0,
-    ),
-    weightedVolumeKg: sessionSets.reduce((total, set) => {
-      if (loadTypeByExerciseId.get(set.exerciseId) !== 'weighted') return total
-      if (!isPositiveFinite(set.weightKg) || !isRecordedSet(set)) return total
-      return total + set.weightKg * set.reps
-    }, 0),
+    totalReps: aggregateSets(sessionSets, 'weighted').totalReps,
+    weightedVolumeKg: aggregateSets(
+      sessionSets.filter((set) => loadTypeByExerciseId.get(set.exerciseId) === 'weighted'),
+      'weighted',
+    ).rawVolume,
   }
 }
 
 export function calculateMaxWeight(sets: readonly SetNumbers[]): number | undefined {
-  const weights = sets
-    .filter(isRecordedSet)
-    .map((set) => set.weightKg)
-    .filter(isPositiveFinite)
-  return weights.length > 0 ? Math.max(...weights) : undefined
+  return aggregateSets(sets, 'weighted').maxWeight
 }
 
 export function calculateMinimumAssistance(sets: readonly SetNumbers[]): number | undefined {
-  const assistance = sets
-    .filter(isRecordedSet)
-    .map((set) => set.weightKg)
-    .filter((weight): weight is number =>
-      weight !== undefined && Number.isFinite(weight) && weight >= 0,
-    )
-  return assistance.length > 0 ? Math.min(...assistance) : undefined
+  return aggregateSets(sets, 'assisted').maxWeight
 }
 
 export function calculateMaxReps(sets: readonly SetNumbers[]): number | undefined {
-  const reps = sets.filter(isRecordedSet).map((set) => set.reps)
-  return reps.length > 0 ? Math.max(...reps) : undefined
+  return aggregateSets(sets, 'weighted').maxReps
 }
 
 export function calculateSessionMetric(
@@ -220,43 +196,7 @@ export function calculateSessionMetric(
   loadType: LoadType,
   metric: AnalyticsMetric,
 ): number | undefined {
-  const recordedSets = sets.filter(isRecordedSet)
-  if (recordedSets.length === 0) return undefined
-
-  if (metric === 'maxReps') return calculateMaxReps(recordedSets)
-
-  if (loadType === 'bodyweight') return undefined
-
-  if (loadType === 'bodyweightAdded') {
-    if (metric !== 'maxWeight') return undefined
-    return Math.max(
-      ...recordedSets.map((set) =>
-        set.weightKg !== undefined && Number.isFinite(set.weightKg)
-          ? Math.max(0, set.weightKg)
-          : 0,
-      ),
-    )
-  }
-
-  if (loadType === 'assisted') {
-    return metric === 'maxWeight' ? calculateMinimumAssistance(recordedSets) : undefined
-  }
-
-  if (metric === 'maxWeight') return calculateMaxWeight(recordedSets)
-
-  if (metric === 'estimated1RM') {
-    const estimates = recordedSets
-      .map((set) =>
-        set.weightKg === undefined
-          ? undefined
-          : calculateEpley1RM(set.weightKg, set.reps),
-      )
-      .filter((estimate): estimate is number => estimate !== undefined)
-    return estimates.length > 0 ? Math.max(...estimates) : undefined
-  }
-
-  const hasWeightedSet = recordedSets.some((set) => isPositiveFinite(set.weightKg))
-  return hasWeightedSet ? calculateVolume(recordedSets) : undefined
+  return aggregateSets(sets, loadType)[metric]
 }
 
 export interface AnalyticsPoint {

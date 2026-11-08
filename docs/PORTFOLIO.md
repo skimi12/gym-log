@@ -1,44 +1,44 @@
-# 応募時に説明するためのガイド
+# Portfolio and Interview Guide
 
-このリポジトリは、個人用の筋トレ記録PWAと、C++17 / WebAssemblyによる分析コアで構成されています。重量・回数の記録から履歴・成長推移の確認までを扱い、データは端末内のIndexedDBへ保存します。
+This repository contains a personal workout tracker built as a progressive web app (PWA), with an analytics core written in C++17 and compiled to WebAssembly. The app records weights and reps, shows workout history and progress, and stores data in the browser's IndexedDB.
 
-応募時は、ソースURLに加えて、起動方法、確認した動作、設計の意図、テスト結果を添えると、読み手が作品を確認しやすくなります。
+When sharing the project in a job application, include the source link, instructions for running it, what you verified, why you made key design choices, and your test results.
 
-## 作品紹介の例
+## Sample project description
 
-> 筋トレの重量・回数を記録し、過去の履歴と成長を確認できる個人用PWAです。React / TypeScriptで画面とIndexedDBへの保存を構成し、数値の集計処理をC++17のコアへ分離してWebAssemblyでブラウザから呼び出しています。自重、追加重量、アシストでは指標の意味が異なるため、欠損値や0kgの扱いを区別し、既存のJavaScript実装との互換性をテストで確認する構成にしています。
+> This personal workout tracker lets you record weights and reps, review past workouts, and track your progress. The React and TypeScript app handles the interface and stores records in IndexedDB. It calls a C++17 analytics core in the browser through WebAssembly. The meaning of a metric depends on whether an exercise is bodyweight, uses added weight, or is assisted. The app distinguishes a missing weight from a valid weight of 0 kg, and tests check that the analytics match the existing JavaScript implementation.
 
-この説明に、自身で確認・修正した点や動作例を加えて使えます。
+Add a specific example of what you verified or changed and how it works.
 
-## 技術面で話せること
+## Technical topics to discuss
 
-| 話題 | 説明の要点 | 自分で確認しておくこと |
+| Topic | What to explain | What to check for yourself |
 |---|---|---|
-| C++への分離 | 集計をUIや保存から切り離し、ネイティブとWASMの両方で同じコアを使う。 | `Accumulator`の状態と、1セット追加したときの更新を追えるか。 |
-| ABI | 数値と指標の有無フラグを受け渡す。 | `reset → add_set → has_metric / metric`の呼び出し順を説明できるか。 |
-| 欠損値 | 記録なしと有効な0kgを区別する。 | アシスト0kg、重量未入力、自重を具体例で説明できるか。 |
-| 数値の境界 | 1RMは1〜12回を対象とし、入力のNaN・Infinityと計算時のオーバーフローを分ける。 | 12回と13回の結果、空の記録、極端な値をテストで確かめられるか。 |
-| メモリ | セットを逐次集計し、集計器の追加メモリはO(1)。 | 集計器・WASM・履歴配列それぞれのメモリ使用を説明できるか。 |
-| 状態管理 | WASMインスタンスごとに集計器があり、同一インスタンスの処理を交錯させない。 | 独立した2インスタンスが互いの結果を変えない理由を説明できるか。 |
-| オフライン | アプリとWASMを静的アセットとしてキャッシュする。 | 初回オンライン後の利用と、初回からオフラインの場合を区別できるか。 |
-| 回帰防止 | C++単体、実WASM、既存JavaScript、保存や履歴のテストを組み合わせる。 | READMEのコマンドを実行し、失敗した場合に最小の再現例を作れるか。 |
+| C++ analytics core | Analytics are separate from the UI and storage. The same core runs natively and in WebAssembly. | Can you trace the `Accumulator` state and see what changes when you add a set? |
+| ABI | The interface passes numeric values and flags that indicate whether a metric is available. | Can you explain the order of calls in `reset → add_set → has_metric / metric`? |
+| Missing values | A missing weight and a valid weight of 0 kg are distinct. | Can you give examples of 0 kg of assistance, an omitted weight, and a bodyweight exercise? |
+| Numeric edge cases | The 1RM estimate applies to sets of 1 to 12 reps. The code handles `NaN` and `Infinity` inputs separately from overflow during calculation. | Can you use the tests to check what happens at 12 and 13 reps, with no sets, and with extreme values? |
+| Memory use | The accumulator processes sets one at a time and uses O(1) extra memory. | Can you explain the memory used by the accumulator, the WASM instance, and the workout history array? |
+| State management | Each WASM instance has its own accumulator. Calls for separate calculations on the same instance must run without interleaving. | Can you explain why two separate instances cannot change each other's results? |
+| Offline use | The app and the WASM module are cached as static assets. | Can you explain what happens when you go offline after the first online visit versus opening the app for the first time offline? |
+| Regression tests | The test suite covers the C++ core, the compiled WASM module, the existing JavaScript implementation, storage, and workout history. | Can you run the commands in the README and build a minimal reproduction if something fails? |
 
-設計の詳細は[ARCHITECTURE.md](ARCHITECTURE.md)に記載しています。
+See the [architecture notes](ARCHITECTURE.md) for design details.
 
-## 応募前に確認する操作
+## Checks before applying
 
-1. READMEの手順でアプリを起動する。
-2. 通常の重量、自重、追加重量、アシストの記録を作り、分析の違いを確かめる。
-3. 画面を再読み込みして記録が残ること、過去の記録を編集すると分析に反映されることを確かめる。
-4. 本番ビルドを一度オンラインで読み込んだ後、オフラインでの起動と分析を確認する。
-5. `npm run test:native`、`npm run verify:wasm`、`npm test`、`npm run build`を実行し、実行環境と結果を残す。C++を変更した場合は、固定したZig 0.15.2で`npm run build:wasm`を実行してから再確認する。
+1. Run the app using the instructions in the README.
+2. Log sets for weighted, bodyweight, added-weight, and assisted exercises. Check how their analytics differ.
+3. Reload the page and check that the records are still there. Edit a past record and check that the analytics update.
+4. Open the production build while online, then check that it starts and shows analytics offline.
+5. Run `npm run test:native`, `npm run verify:wasm`, `npm test`, and `npm run build`. Record your environment and results. If you change the C++ code, run `npm run build:wasm` with the pinned Zig 0.15.2 toolchain before repeating the checks.
 
-## 性能と対応範囲の説明
+## Performance and scope
 
-現時点ではJavaScriptとWASMの性能比較は未計測です。比較する場合は同一データ・同一仕様を使い、初期化時間、呼び出しのコスト、データ件数、繰り返し回数、実行環境を記録します。
+The project has no JavaScript versus WASM performance benchmarks yet. For a fair comparison, use the same data and calculation rules for both implementations. Record the initialization time, call overhead, dataset size, number of repetitions, and test environment.
 
-C++が数値集計、Reactが画面、IndexedDBが端末内の保存を担当します。説明の中心は、責務分離、言語間の契約、既存アプリへの統合と検証です。クラウド同期と記録の自動バックアップは未対応です。
+C++ calculates the metrics, React displays them, and IndexedDB stores records locally. When discussing the design, explain how those responsibilities are separated, how the languages communicate, and how you integrate and test the C++ core in the existing app. Cloud sync and automatic backups of workout records are outside the current scope.
 
-## AI支援の扱い
+## AI assistance
 
-この拡張はCodexの支援でコード・テスト・文書を作成しています。応募時は、利用したツールと、自身が説明・修正できる範囲を明記し、確認した動作や改善した点を具体例で示してください。
+Codex assisted with the code, tests, and documentation for the analytics extension. In a job application, name the tools you used, explain which parts you can describe and modify yourself, and give specific examples of what you verified or improved.

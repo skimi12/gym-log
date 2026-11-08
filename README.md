@@ -1,64 +1,64 @@
-# 筋トレ記録
+# Gym Log
 
-筋トレの重量と回数を記録して、前回の記録や成長をグラフで見られるアプリです。記録は使っているブラウザのIndexedDBに保存します。
+Log your weights and reps, look up your last workout, and see your progress on a chart. Gym Log saves your records in your browser's IndexedDB.
 
-分析画面では、TypeScriptが重量と回数を1セットずつC++に渡し、Reactが集計結果を表示します。C++はWebAssemblyに変換してブラウザで動かしています。たとえば60 kgを5回、55 kgを8回なら、最高重量は60 kg、最大回数は8回、ボリューム（重量×回数の合計）は740 kg・回です。
+On the analytics screen, TypeScript passes the weight and reps for each set to C++, and React displays the results. The C++ code runs in the browser as WebAssembly. For example, if you lift 60 kg for 5 reps and 55 kg for 8 reps, your heaviest set is 60 kg, your highest rep count is 8, and your total volume is 740 kg × reps (60 × 5 + 55 × 8).
 
-集計処理は [`native/src/analytics_core.cpp`](native/src/analytics_core.cpp) にあります。[設計とテストの詳細](docs/ARCHITECTURE.md)も参照できます。
+The calculations are in [`native/src/analytics_core.cpp`](native/src/analytics_core.cpp). See [Architecture and testing](docs/ARCHITECTURE.md) for more detail.
 
-## 主な機能
+## Features
 
-- 重量・回数・セットの記録、自動保存、前回記録のコピー、中断したトレーニングの復元
-- 133種目の初期データ、種目検索、お気に入り、並べ替え、カスタム種目
-- トレーニング履歴の閲覧・編集・削除
-- 最高重量・最大回数・推定1RM・ボリュームの推移をグラフで確認
-- kg / lb表示、自重・追加重量・アシスト、ライト / ダークテーマ
-- iPhoneのホーム画面追加、オフライン利用、更新通知
+- Log weights, reps, and sets with autosave. Copy entries from your last workout or resume an interrupted session.
+- Search and sort 133 built-in exercises, save favorites, and add your own exercises.
+- View, edit, or delete past workouts.
+- Chart your heaviest weight, highest rep count, estimated one-rep max (1RM), and workout volume over time.
+- Switch between kg and lb and between light and dark themes. Track bodyweight, weighted bodyweight, and assisted exercises.
+- Add the app to your iPhone Home Screen, use it offline, and get notified when an update is available.
 
-## Windowsで開発する
+## Development on Windows
 
-Node.jsの安定版をインストールしたWindows環境で、PowerShellまたはWindows Terminalからこのフォルダーを開きます。
+Install a stable version of Node.js, then open this folder in PowerShell or Windows Terminal.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Viteが表示したローカルURLをPCのブラウザで開いてください。同じLAN内のiPhoneから開発サーバーを確認したい場合は `npm run dev -- --host` を使用できますが、iPhoneへのPWAインストールとService Workerの確認にはHTTPS環境を推奨します。
+Open the local URL printed by Vite in your browser. To access the development server from an iPhone on the same network, use `npm run dev -- --host`. Use HTTPS when testing installation as a PWA or checking the service worker on an iPhone.
 
-## ビルド
+## Build
 
 ```bash
 npm run build
 ```
 
-静的ファイルは `dist` に生成されます。
+The build writes the static files to `dist`.
 
-Sitesで公開する場合は、次のコマンドで公開用のWorkerも生成します。
+If you deploy with Sites, this command also generates the deployment worker:
 
 ```bash
 npm run build:sites
 ```
 
-## テスト
+## Tests
 
 ```bash
 npm run test
 ```
 
-ブラウザ向けのテストでも同梱の実WebAssemblyを読み込みます。JavaScriptの代替計算やWASMのモックは使いません。既存の記録・分析テストに加え、4種類の負荷・欠損値・境界値・大量セット・初期化失敗時の再試行を検証します。
+The browser-facing tests load the bundled WebAssembly directly. In addition to testing workout logging and analytics, they cover all four load types, missing values, boundary cases, large sets of workout data, and retries after initialization fails.
 
-## C++での実装
+## C++ implementation
 
-### ネイティブテスト
+### Native tests
 
-GCCまたはClangのC++17コンパイラとNode.jsを用意します。WindowsではMSYS2のMinGW GCCを使用できます。
+Install Node.js and a C++17 compiler (GCC or Clang). On Windows, you can use MinGW GCC from MSYS2.
 
 ```bash
 npm run test:native
 ```
 
-コンパイラを指定する場合は環境変数 `CXX` に実行ファイルのパスを設定します。CMakeを使用する場合は次の手順でも実行できます（追加ライブラリは不要です）。
+To choose a compiler, set the `CXX` environment variable to its executable path. You can also run the tests with CMake. They require no additional libraries.
 
 ```bash
 cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
@@ -66,9 +66,9 @@ cmake --build build/cmake
 ctest --test-dir build/cmake --output-on-failure
 ```
 
-### WebAssemblyの再生成
+### Rebuild WebAssembly
 
-通常のWeb開発には同梱済みの `public/wasm/gym-core.wasm` を利用でき、C++コンパイラのインストールは不要です。C++ソースを変更した場合は、[公式Zig 0.15.2](https://ziglang.org/download/)のC++コンパイラで再生成してください。Zigはビルドツールとしてだけ使い、アプリの計算処理はC++で記述しています。
+For regular web development, use the bundled `public/wasm/gym-core.wasm`. If you change the C++ source, rebuild it with the C++ compiler included in [Zig 0.15.2](https://ziglang.org/download/). Zig is a build tool for the C++ code.
 
 ```bash
 npm run build:wasm
@@ -77,45 +77,45 @@ npm test
 npm run build
 ```
 
-ZigがPATHにない場合は環境変数 `ZIG` に実行ファイルのパスを設定します。C++ソースと生成WASMのSHA-256を `native/wasm-manifest.json` に記録し、`npm test` と `npm run build` で一致を検査します。ソース変更後に古いバイナリを使ってしまう場合はビルドを停止します。
+If Zig is not on your `PATH`, set the `ZIG` environment variable to its executable path. The build records SHA-256 hashes for the C++ source and the generated WASM in `native/wasm-manifest.json`. Both `npm test` and `npm run build` check these hashes and stop if the source or binary is out of sync.
 
-この構成ではC++が数値計算、Reactが画面、IndexedDBが保存を担当します。速度の優位性は未計測です。
+There are no benchmarks comparing WebAssembly and JavaScript performance.
 
-## 本番ビルドをローカル確認する
+## Preview the production build locally
 
 ```bash
 npm run preview
 ```
 
-## iPhoneで使う方法
+## Use Gym Log on iPhone
 
-このアプリはPWAです。本番利用では `npm run build` で生成した `dist` をHTTPS対応の静的ホスティングへ配置してください。Cloudflare Pages、Vercel、Netlify、GitHub Pagesなどを利用できます。特定サービス固有のAPIには依存していません。
+Gym Log is a progressive web app (PWA). To deploy it, upload the `dist` directory created by `npm run build` to a static host that supports HTTPS, such as Cloudflare Pages, Vercel, Netlify, or GitHub Pages. The app does not depend on any provider-specific APIs.
 
-ホスティング側の設定は、ビルドコマンドを `npm run build`、公開ディレクトリを `dist` にします。URLパスを使うルーターは採用していないため、通常はSPA用の特別なリライト設定も不要です。
+Set the build command to `npm run build` and the publish directory to `dist`. The app does not use URL paths for routing, so you usually do not need rewrite rules for a single-page app.
 
-公開したURLをiPhoneのSafariで開き、次の順に操作します。
+Open the deployed URL in Safari on your iPhone:
 
-1. Safari下部の共有ボタンをタップ
-2. 「ホーム画面に追加」をタップ
-3. 名前を確認して「追加」をタップ
-4. ホーム画面の「筋トレ記録」アイコンから起動
+1. Tap the Share button.
+2. Tap **Add to Home Screen**.
+3. Check the name and tap **Add**.
+4. Open the app from its Home Screen icon.
 
-最初にオンラインで一度開くとアプリシェルがキャッシュされ、その後はオフラインでも記録・履歴・分析を利用できます。新しいバージョンが見つかった場合はアプリ内に更新案内が表示され、トレーニング中に自動リロードは行いません。
+Open the app once while online so it can cache the files it needs. You can then log workouts, view your history, and check your progress offline. When a new version is available, the app shows an update prompt. You can apply the update after your workout ends.
 
-## データ保存について
+## Data storage
 
-筋トレ記録、種目、お気に入り、設定はすべて、そのブラウザのIndexedDBへ保存されます。サーバーへの送信やクラウドバックアップはありません。
+Workouts, exercises, favorites, and settings are stored in the current browser's IndexedDB. The app does not send this data to a server or back it up to the cloud.
 
-Safariの「履歴とWebサイトデータを消去」、サイトデータの個別削除、端末の初期化などを行うと記録が失われる可能性があります。v1ではバックアップおよびCSV出力を提供していません。
+Clearing Safari history and website data, deleting this site's data, or resetting your device can erase your records. Version 1 does not support backups or CSV export.
 
-## 主な構成
+## Tech stack
 
 - React + TypeScript + Vite
-- C++17のストリーミング分析エンジン / WebAssembly（実行時の外部依存・ネットワーク処理なし）
-- Dexie.js / dexie-react-hooks（IndexedDB）
-- Recharts（分析グラフ）
-- lucide-react（UIアイコン）
-- vite-plugin-pwa（Manifest / Service Worker）
-- Vitest（単体テスト）
+- C++17 / WebAssembly for set-by-set analytics, with no external runtime dependencies or network calls
+- Dexie.js and dexie-react-hooks for IndexedDB
+- Recharts for analytics charts
+- lucide-react for icons
+- vite-plugin-pwa for the web app manifest and service worker
+- Vitest for unit tests
 
-内部の重量は常にkgで保存し、表示時のみkgまたはlbへ換算します。バーベルはバー込みの総重量、ダンベルは片手1個あたり、マシンとケーブルは表示重量を入力してください。
+The app stores weights in kilograms and converts them to pounds for display when needed. For barbells, enter the total weight including the bar. For dumbbells, enter the weight of one dumbbell. For machines and cables, enter the weight shown on the equipment.

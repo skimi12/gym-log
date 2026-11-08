@@ -1,86 +1,86 @@
-# C++ / WebAssembly分析コアの設計
+# C++ and WebAssembly Analytics Architecture
 
-筋トレ記録の画面・保存機能はReactとIndexedDBで構成し、セットから数値指標を集計する部分をC++17のコアへ分離します。同じコアをネイティブ実行とブラウザのWebAssemblyで使う構成です。
+Gym Log uses React for the interface and IndexedDB for storage. A separate C++17 core computes workout metrics from recorded sets. The same core runs natively and in the browser through WebAssembly.
 
-目的は、既存の個人用PWAを保ちながら、C++の責務分離、数値の境界条件、言語間の契約、複数の実行環境での検証を示すことです。処理時間やメモリ使用量の比較計測に基づく高速化の主張はしていません。小さな個人用データでは、WebAssemblyの初期化や呼び出しのコストが計算時間を上回る可能性があります。
+The project keeps the existing personal workout PWA while demonstrating how to isolate the C++ code, handle numeric edge cases, define a contract between languages, and verify the code in both environments. There are no comparative benchmarks for runtime or memory use. With a small workout history, initializing and calling WebAssembly may take longer than the calculation itself.
 
-## 責務とデータの流れ
+## Responsibilities and Data Flow
 
 ```text
-IndexedDB（Dexie）
+IndexedDB (Dexie)
     ↓ WorkoutSession / WorkoutSet
-TypeScript：種目・完了セッション・期間で抽出
-    ↓ weightKg / reps / 重量の有無
-WebAssemblyのC ABI
+TypeScript: filter by exercise, completed sessions, and date range
+    ↓ weightKg / reps / whether a weight was entered
+WebAssembly C ABI
     ↓
-C++ Accumulator：最高重量・最高回数・推定1RM・ボリューム
-    ↓ 数値と指標の有無
-TypeScript：kg/lb変換・日付・表示用の整形
+C++ Accumulator: maximum weight, maximum reps, estimated 1RM, and volume
+    ↓ metric values and availability
+TypeScript: convert kg/lb and format dates and values for display
     ↓
 React / Recharts
 ```
 
-`native/include/gym/analytics_core.hpp` は公開するC++の型と`gym::Accumulator`、`native/src/analytics_core.cpp` は実装、`native/tests/analytics_core_test.cpp` はネイティブ側の検証を担当します。ブラウザとの接続は`src/native/analyticsEngine.ts`、配布するバイナリは`public/wasm/gym-core.wasm`です。コアはブラウザ、DOM、IndexedDB、時計、ファイル、ネットワークを参照しません。
+`native/include/gym/analytics_core.hpp` declares the public C++ types and `gym::Accumulator`. The implementation is in `native/src/analytics_core.cpp`, and the native tests are in `native/tests/analytics_core_test.cpp`. The browser adapter is in `src/native/analyticsEngine.ts`, and the app ships `public/wasm/gym-core.wasm`. The core has no dependencies on the browser, the DOM, IndexedDB, clocks, files, or the network.
 
-`createAnalyticsEngine`はWASMの外部インポートが0個であること、必要な関数の存在、ABIバージョンを検査し、エンジンごとに独立したWASMインスタンスを作ります。アプリ起動処理は初期化の成功を待ってからReactの画面を表示します。読み込みに失敗した場合は記録を変更せず再試行画面を表示し、別のJavaScript計算へ自動で切り替えません。
+`createAnalyticsEngine` verifies that the WASM module has zero external imports, exports the required functions, and reports the expected ABI version. It creates a separate WASM instance for each engine. The app waits for initialization before displaying the React interface. If loading fails, the app leaves workout records intact and shows a retry screen. It does not fall back to a separate JavaScript implementation.
 
-日付の解釈、月末を考慮する期間フィルター、同日セッションの区別、表示単位、文字列の整形はTypeScriptに残します。C++に渡す重量の単位は常にkgです。体重は入力から推定せず、自重・追加重量・アシストを通常の重量と混ぜて集計しません。
+TypeScript handles date interpretation, date ranges that account for month ends, separate sessions on the same day, display units, and text formatting. The C++ core always receives weights in kilograms. Analytics does not infer the user's body weight and treats bodyweight, added-weight, and assisted exercises separately from standard weighted exercises.
 
-## ABIバージョン1
+## ABI Version 1
 
-JavaScriptからC++オブジェクトの内部レイアウトやポインターを参照せず、数値だけを受け渡すC ABIを使用します。
+The C ABI passes only numbers between JavaScript and C++. JavaScript never reads C++ object layouts or pointers.
 
-| エクスポート | 契約 |
+| Export | Contract |
 |---|---|
-| `gym_abi_version() -> int` | 対応するABIでは`1`を返す。 |
-| `gym_reset(int load_type)` | 集計状態を初期化し、負荷タイプを指定する。 |
-| `gym_add_set(double weight_kg, double reps, int has_weight)` | 1セットを追加する。`has_weight`が0なら重量未入力、それ以外なら入力あり。 |
-| `gym_has_metric(int metric) -> int` | 指標が存在する場合に1、それ以外に0を返す。 |
-| `gym_metric(int metric) -> double` | 指標値を返す。存在しない場合は0なので、有無は別に確認する。 |
-| `gym_volume() -> double` | 正の有限重量と正の有限回数を持つセットの重量×回数の合計。負荷タイプ別の対応可否とは別の集計値。 |
-| `gym_total_reps() -> double` | 有効な記録セットの回数合計。 |
-| `gym_recorded_count() -> double` | 有効な記録セットの件数。 |
+| `gym_abi_version() -> int` | Returns `1` for this ABI version. |
+| `gym_reset(int load_type)` | Clears the accumulator and selects the load type. |
+| `gym_add_set(double weight_kg, double reps, int has_weight)` | Adds one set. A value of 0 for `has_weight` means no weight was entered. Any other value means a weight was entered. |
+| `gym_has_metric(int metric) -> int` | Returns 1 when the metric is available and 0 otherwise. |
+| `gym_metric(int metric) -> double` | Returns the metric value, or 0 if unavailable. Check availability separately. |
+| `gym_volume() -> double` | Sums weight × reps for sets with positive, finite weights and rep counts. This raw total is independent of metric availability for the current load type. |
+| `gym_total_reps() -> double` | Returns the total reps across valid recorded sets. |
+| `gym_recorded_count() -> double` | Returns the number of valid recorded sets. |
 
-負荷タイプは`0: weighted`、`1: bodyweight`、`2: bodyweightAdded`、`3: assisted`です。指標は`0: maxWeight`、`1: maxReps`、`2: estimated1RM`、`3: volume`です。不正な負荷タイプでリセットした状態はセット追加を無視し、不正な指標番号は有無0・値0を返します。
+Load types are `0: weighted`, `1: bodyweight`, `2: bodyweightAdded`, and `3: assisted`. Metrics are `0: maxWeight`, `1: maxReps`, `2: estimated1RM`, and `3: volume`. After a reset with an invalid load type, the accumulator ignores sets until the next valid reset. For an invalid metric ID, both the availability check and the value return 0.
 
-`reset → add_setを必要回数 → has_metric / metric`が1回の集計操作です。WASMインスタンスごとに集計器は1つあり、同一インスタンスの操作を途中で別の集計に切り替えてはいけません。TypeScript側で独立したインスタンスを作る場合は状態を共有しません。単一インスタンス内のトランザクションを非同期処理で中断・交錯させないことが前提です。
+For each calculation, call `gym_reset`, call `gym_add_set` for each set, then query `gym_has_metric` and `gym_metric`. Each WASM instance holds one accumulator. Complete the sequence synchronously before starting another calculation on the same instance. Separate instances created in TypeScript have independent state.
 
-## 数値の意味と欠損値
+## Metric Rules and Missing Values
 
-指標の欠損と数値の0を分けます。例えば、アシスト重量0kgと「記録なし」は異なるため、JavaScriptラッパーは`gym_has_metric`を確認し、欠損を`undefined`へ戻します。正の入力同士の乗算がアンダーフローしてボリュームが0になった場合も、有効な指標が存在する状態として扱います。
+A missing metric differs from a numeric zero. For example, 0 kg of assistance is a valid result. The JavaScript wrapper checks `gym_has_metric` and returns `undefined` when a metric is missing. If multiplying positive inputs underflows to zero, the volume metric is still available.
 
-| 条件 | 集計方法 |
+| Case | Calculation |
 |---|---|
-| 記録セット | 回数が有限かつ0より大きいセット。最高回数やボリュームでは小数の回数も既存仕様に合わせて受け付ける。 |
-| 通常の重量 | 最高重量とボリュームでは有限かつ正の重量だけを使う。 |
-| 推定1RM | 正の有限重量、整数の回数1〜12を対象に`weight × (1 + reps / 30)`を計算する。13回以上は対象外。 |
-| 自重 | 最高回数だけを提供する。体重を仮定した重量・推定1RM・ボリュームは作らない。 |
-| 自重＋追加重量 | 最高追加重量と最高回数を提供する。記録セットの重量未入力・非有限値・負数は追加重量0として扱う。 |
-| アシスト | 最高回数と最小の非負補助重量を提供する。補助重量は小さいほどよい値として表示する。 |
+| Recorded set | A set counts if its rep count is finite and greater than zero. Maximum reps and volume accept fractional reps to match the previous behavior. |
+| Standard weighted exercise | Maximum weight and volume use only positive, finite weights. |
+| Estimated 1RM | Calculates `weight × (1 + reps / 30)` for positive, finite weights and whole rep counts from 1 to 12. Sets of 13 or more reps are excluded. |
+| Bodyweight | Provides only maximum reps. It does not assume a body weight for maximum weight, estimated 1RM, or volume. |
+| Bodyweight with added weight | Provides maximum added weight and maximum reps. A missing, non-finite, or negative weight on a recorded set counts as zero added weight. |
+| Assisted | Provides maximum reps and the lowest non-negative assistance weight. Lower assistance means a harder set. |
 
-NaNやInfinityを含む入力は、各指標の既存の条件に従って除外・解釈します。**有限の入力から計算した結果が常に有限になるという契約ではありません。** 極端な値の乗算や加算はInfinityへオーバーフローし得ます。この挙動も既存JavaScript実装との互換対象です。UIの入力制約と分析コアの数値契約は別々の責務です。
+The core handles NaN and Infinity according to each metric's input rules. **Finite inputs can still produce an infinite result.** Multiplication or addition can overflow to Infinity for extreme values, as it did in the previous JavaScript implementation. The UI enforces its own input limits separately from the core's numeric rules.
 
-## メモリと実行上の制約
+## Memory and Runtime Constraints
 
-コアは追加されたセットを保存せず、必要な最大値・最小値・合計・有無フラグを逐次更新します。nセットの処理量はO(n)、集計器の追加メモリはO(1)です。ネイティブの集計処理は動的メモリ確保や入力配列を必要としません。文字列、ポインター、共有入力バッファーの所有権をABIで扱わないため、言語間での解放処理もありません。
+The core keeps running maxima, minima, totals, and flags for metric availability. It processes each set as it arrives and does not retain the sets. Processing n sets takes O(n) time and uses O(1) additional memory in the accumulator. Native calculations require neither heap allocation nor an input array. The ABI passes no strings, pointers, or shared input buffers, so neither language needs to free memory allocated by the other.
 
-このO(1)は集計器に限る説明です。配布用WASMのビルドでは線形メモリの初期値・最大値を128 KiB、スタックを16 KiBに設定します。WebAssemblyモジュール、TypeScriptが保持する履歴配列、IndexedDB、チャートの表示データまで含むアプリ全体のメモリ使用量が一定という意味ではありません。WASMの初期化失敗、未対応ブラウザ、キャッシュの破損は集計の数学的正しさとは別に扱う必要があります。
+The WASM build sets both the initial and maximum linear memory to 128 KiB and the stack to 16 KiB. The accumulator's O(1) bound covers only its own state. The app also uses memory for the WASM module, the history arrays in TypeScript, IndexedDB, and the chart data. The app must handle initialization failures, unsupported browsers, and corrupt caches separately from calculation errors.
 
-## 保存・オフライン・更新
+## Storage, Offline Use, and Updates
 
-WebAssemblyはアプリと同じ配信元に置く静的アセットです。`vite.config.ts`のキャッシュ対象拡張子に`wasm`を含め、本番ビルドではWASMファイルもService Workerのキャッシュ対象にします。初回のオンライン読み込みとキャッシュ完了後に、オフラインでも分析モジュールを読み込める構成にします。初回アクセスから通信がない状態で使えることを意味しません。
+WebAssembly is a static asset served from the same origin as the app. `vite.config.ts` includes the `wasm` extension in the Service Worker cache settings. In a production build, the Service Worker precaches the WASM file so that analytics can load offline after the first successful online load and cache setup.
 
-この変更はサーバー、外部API、クラウド同期を追加せず、IndexedDBの既存スキーマや記録を移行しません。別のホスト名へアプリを移した場合、元の配信元にある記録が自動的に移るわけではありません。更新時にはJavaScriptラッパーとWASMの組み合わせを確認し、既存の更新案内を通して配信します。
+The app continues to use its existing IndexedDB schema. The analytics integration requires no record migration, server, external API, or cloud sync. If the app moves to a new hostname, records stored under the original origin do not move automatically. For each release, check that the JavaScript adapter and WASM binary are compatible and distribute the update through the app's existing prompt.
 
-## 検証方針
+## Testing
 
-- **ネイティブC++**：型と指標の対応、欠損と0、初期化、入力の有効性、Epleyの境界、極端な数値を検証する。
-- **実際のWASM**：生成物をWebAssemblyとしてロードし、エクスポートとABIバージョン、C++とJavaScriptの受け渡し、別インスタンスの状態分離を検証する。C++をネイティブ実行できるだけではブラウザ統合の確認にはならない。
-- **既存JavaScriptとの互換性**：通常の入力と境界値で同じ指標の有無・数値が得られることを確認する。浮動小数点の比較では許容誤差やInfinityの扱いを明示する。
-- **既存アプリの回帰**：DB、履歴、種目、単位、日付、期間、分析の既存テストを実行する。
-- **本番ビルド**：TypeScript、Vite、PWAの生成が通り、WASMアセットとそのキャッシュ項目が生成物に含まれることを確認する。
+- **Native C++.** Test which metrics each load type supports, missing versus zero values, initialization, input validation, Epley formula boundaries, and extreme values.
+- **WebAssembly.** Load the compiled WASM binary and verify the exports, ABI version, values passed between C++ and JavaScript, and isolation between instances. The native tests cover the core, while these tests exercise the browser integration boundary.
+- **Compatibility with the previous JavaScript implementation.** Check that typical inputs and edge cases produce the same metric values and availability. State the tolerances for floating-point comparisons and how to handle Infinity.
+- **App regressions.** Run the existing tests for the database, workout history, exercises, units, dates, date ranges, and analytics.
+- **Production build.** Check that the TypeScript, Vite, and PWA build steps pass and that the output contains the WASM asset and its cache entry.
 
-## ビルドと生成物の整合性
+## Builds and Artifact Integrity
 
 ```sh
 npm run test:native
@@ -90,8 +90,8 @@ npm test
 npm run build
 ```
 
-`test:native`は`CXX`で指定したC++17コンパイラーを使い、未指定の場合は`g++`を呼び出します。`build:wasm`は固定したZig 0.15.2を使用し、`ZIG`環境変数に実行ファイルを指定できます。WASMバイナリはリポジトリへ同梱するため、C++を変更しない通常のアプリ開発で毎回コンパイラーを用意する必要はありません。
+`test:native` uses the C++17 compiler specified by `CXX` and defaults to `g++`. `build:wasm` uses the pinned Zig 0.15.2 toolchain. Set the `ZIG` environment variable to specify the executable. The repository includes the compiled WASM binary so that app development that does not touch C++ can proceed without the C++ toolchain.
 
-`build:wasm`はソースと生成バイナリのSHA-256、バイナリのサイズ、コンパイラー、ABIバージョンを`native/wasm-manifest.json`へ記録します。`verify:wasm`はソースとバイナリのハッシュ・サイズを照合し、実際のWASMをロードしてインポート・エクスポート・ABIバージョンを検査します。`npm test`と`npm run build`にもこの検証を含め、C++だけを変更して古いバイナリを残す事故を検出します。これはリポジトリ内の生成物の整合性確認であり、第三者による署名検証ではありません。
+`build:wasm` records the SHA-256 hashes of the sources and compiled binary, the binary size, the compiler, and the ABI version in `native/wasm-manifest.json`. `verify:wasm` checks the hashes and binary size, then loads the actual WASM to verify imports, exports, and the ABI version. Both `npm test` and `npm run build` run this check to catch a stale binary after a C++ change. It checks consistency between the repository's files. It does not verify third-party signatures.
 
-確認済みの実行結果はREADMEとPR本文に記載します。ここにある検証方針は、すべてのブラウザや実端末での動作保証、速度の優位性を示すものではありません。
+The README and pull request record the checks that were run. The test plan covers the environments listed above and does not establish browser-wide compatibility or a performance advantage.

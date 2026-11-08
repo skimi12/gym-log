@@ -1,10 +1,10 @@
 # 筋トレ記録
 
-ジムで重量と回数をすばやく記録し、前回記録と成長推移を確認するための完全個人用PWAです。データは端末内のIndexedDBに保存され、ログイン、クラウド同期、外部送信は行いません。
+筋トレの重量と回数を記録して、前回の記録や成長をグラフで見られるアプリです。記録は使っているブラウザのIndexedDBに保存します。
 
-重量・回数・推定1RM・ボリュームの計算エンジンを **C++17** で実装し、WebAssemblyにコンパイルしてブラウザから実際に利用しています。画面はReact、保存はIndexedDBです。C++だけで動く単体テストも用意しています。
+分析画面では、TypeScriptが重量と回数を1セットずつC++に渡し、Reactが集計結果を表示します。C++はWebAssemblyに変換してブラウザで動かしています。たとえば60 kgを5回、55 kgを8回なら、最高重量は60 kg、最大回数は8回、ボリューム（重量×回数の合計）は740 kg・回です。
 
-[設計・ABI・検証方針](docs/ARCHITECTURE.md) / [応募用の説明と面接準備](docs/PORTFOLIO.md)
+集計処理は [`native/src/analytics_core.cpp`](native/src/analytics_core.cpp) にあります。[設計とテストの詳細](docs/ARCHITECTURE.md)も参照できます。
 
 ## 主な機能
 
@@ -34,7 +34,7 @@ npm run build
 
 静的ファイルは `dist` に生成されます。
 
-Codex Sitesへ公開する場合は、通常ビルドを保ったまま公開用Workerも生成します。
+Sitesで公開する場合は、次のコマンドで公開用のWorkerも生成します。
 
 ```bash
 npm run build:sites

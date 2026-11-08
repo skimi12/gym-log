@@ -49,14 +49,10 @@ class Accumulator {
   double recorded_count() const noexcept { return recorded_count_; }
 
  private:
-  enum Flag : unsigned int {
-    HasPositiveWeight = 1U,
-    HasAssistance = 2U,
-    HasEstimate = 4U,
-  };
-
   LoadType load_type_ = LoadType::Weighted;
-  unsigned int flags_ = 0;
+  bool has_positive_weight_ = false;
+  bool has_assistance_ = false;
+  bool has_estimate_ = false;
   double max_weight_ = 0;
   double max_reps_ = 0;
   double min_assistance_ = 0;

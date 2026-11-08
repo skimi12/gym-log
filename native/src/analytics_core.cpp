@@ -4,7 +4,9 @@ namespace gym {
 
 void Accumulator::reset(LoadType load_type) noexcept {
   load_type_ = load_type;
-  flags_ = 0;
+  has_positive_weight_ = false;
+  has_assistance_ = false;
+  has_estimate_ = false;
   max_weight_ = 0;
   max_reps_ = 0;
   min_assistance_ = 0;
@@ -20,37 +22,44 @@ void Accumulator::add_set(double weight_kg, double reps, bool has_weight) noexce
     return;
   }
 
-  recorded_count_ += 1;
+  ++recorded_count_;
   total_reps_ += reps;
-  if (reps > max_reps_) max_reps_ = reps;
+  if (reps > max_reps_) {
+    max_reps_ = reps;
+  }
 
-  if (!has_weight || !__builtin_isfinite(weight_kg)) return;
+  if (!has_weight || !__builtin_isfinite(weight_kg)) {
+    return;
+  }
 
   if (weight_kg >= 0) {
-    // Math.min in JavaScript preserves negative zero, independent of ordering.
-    if ((flags_ & HasAssistance) == 0 || weight_kg < min_assistance_ ||
-        (weight_kg == 0 && min_assistance_ == 0 && __builtin_signbit(weight_kg))) {
+    // When the weights are both zero, keep -0 like JavaScript's Math.min.
+    const bool prefer_negative_zero =
+        weight_kg == 0 && min_assistance_ == 0 && __builtin_signbit(weight_kg);
+    if (!has_assistance_ || weight_kg < min_assistance_ || prefer_negative_zero) {
       min_assistance_ = weight_kg;
     }
-    flags_ |= HasAssistance;
+    has_assistance_ = true;
   }
 
-  if (weight_kg <= 0) return;
-  flags_ |= HasPositiveWeight;
-  if (weight_kg > max_weight_) max_weight_ = weight_kg;
+  if (weight_kg <= 0) {
+    return;
+  }
+  has_positive_weight_ = true;
+  if (weight_kg > max_weight_) {
+    max_weight_ = weight_kg;
+  }
   volume_ += weight_kg * reps;
 
-  // The bounded check precedes the integer conversion, avoiding undefined
-  // conversion for huge values, NaN, or infinity. Fractional reps still count
-  // toward max reps and volume, but never enter the Epley model.
-  if (reps >= 1 && reps <= 12 &&
-      reps == static_cast<double>(static_cast<unsigned int>(reps))) {
-    const double estimate = weight_kg * (1 + reps / 30);
-    if ((flags_ & HasEstimate) == 0 || estimate > estimated_1rm_) {
-      estimated_1rm_ = estimate;
-    }
-    flags_ |= HasEstimate;
+  // The Epley estimate uses whole numbers from 1 to 12. Check the range before casting.
+  if (reps < 1 || reps > 12 || reps != static_cast<int>(reps)) {
+    return;
   }
+  const double estimate = weight_kg * (1 + reps / 30);
+  if (!has_estimate_ || estimate > estimated_1rm_) {
+    estimated_1rm_ = estimate;
+  }
+  has_estimate_ = true;
 }
 
 bool Accumulator::has_metric(Metric metric_id) const noexcept {
@@ -62,15 +71,16 @@ bool Accumulator::has_metric(Metric metric_id) const noexcept {
 
   switch (load_type_) {
     case LoadType::Weighted:
-      return metric_id == Metric::Estimated1RM
-                 ? (flags_ & HasEstimate) != 0
-                 : (flags_ & HasPositiveWeight) != 0;
+      if (metric_id == Metric::Estimated1RM) {
+        return has_estimate_;
+      }
+      return has_positive_weight_;
     case LoadType::Bodyweight:
       return false;
     case LoadType::BodyweightAdded:
       return metric_id == Metric::MaxWeight;
     case LoadType::Assisted:
-      return metric_id == Metric::MaxWeight && (flags_ & HasAssistance) != 0;
+      return metric_id == Metric::MaxWeight && has_assistance_;
   }
   return false;
 }
@@ -79,7 +89,11 @@ double Accumulator::metric(Metric metric_id) const noexcept {
   if (!has_metric(metric_id)) return 0;
   switch (metric_id) {
     case Metric::MaxWeight:
-      return load_type_ == LoadType::Assisted ? min_assistance_ : max_weight_;
+      // Less help means a greater load for an assisted exercise.
+      if (load_type_ == LoadType::Assisted) {
+        return min_assistance_;
+      }
+      return max_weight_;
     case Metric::MaxReps:
       return max_reps_;
     case Metric::Estimated1RM:
@@ -101,11 +115,12 @@ extern "C" {
 int gym_abi_version() noexcept { return 1; }
 
 void gym_reset(int load_type) noexcept {
-  // Avoid converting arbitrary integers to an enum with unknown values.
-  const gym::LoadType safe_type = gym::is_valid_load_type(load_type)
-                                      ? static_cast<gym::LoadType>(load_type)
-                                      : static_cast<gym::LoadType>(-1);
-  abi_accumulator.reset(safe_type);
+  if (!gym::is_valid_load_type(load_type)) {
+    // Clear the state and ignore sets until a valid load type is selected.
+    abi_accumulator.reset(static_cast<gym::LoadType>(-1));
+    return;
+  }
+  abi_accumulator.reset(static_cast<gym::LoadType>(load_type));
 }
 
 void gym_add_set(double weight_kg, double reps, int has_weight) noexcept {
@@ -113,16 +128,17 @@ void gym_add_set(double weight_kg, double reps, int has_weight) noexcept {
 }
 
 int gym_has_metric(int metric) noexcept {
-  return gym::is_valid_metric(metric) &&
-                 abi_accumulator.has_metric(static_cast<gym::Metric>(metric))
-             ? 1
-             : 0;
+  if (!gym::is_valid_metric(metric)) {
+    return 0;
+  }
+  return abi_accumulator.has_metric(static_cast<gym::Metric>(metric));
 }
 
 double gym_metric(int metric) noexcept {
-  return gym::is_valid_metric(metric)
-             ? abi_accumulator.metric(static_cast<gym::Metric>(metric))
-             : 0;
+  if (!gym::is_valid_metric(metric)) {
+    return 0;
+  }
+  return abi_accumulator.metric(static_cast<gym::Metric>(metric));
 }
 
 double gym_volume() noexcept { return abi_accumulator.volume(); }
